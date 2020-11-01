@@ -51,6 +51,7 @@
 		* Tune default values for swings, velocities (either hard-code, or perhaps dynamically using m & n).
 		* Auto-detect drilling rigs? (easy when a single rig is on the current grid, might be able to use subgrids off a rotor)
 		* Support multiple Distance Pistons? (Would such a construct even be stable?)
+		* Output? How about calculating an ETA? Swing count, Piston status?
 
 	Theoretically this program should support small grid drilling rigs, but this has not yet been tested.
 **/
@@ -63,7 +64,7 @@ const int MAX_ROTOR_SWINGS = 2;
 const float DISTANCE_DELTA = 2.0f;
 
 // Amount to raise drill pistons/lower lift pistons between swing sets.
-const float HEIGHT_DELTA = 0.3f;
+const float HEIGHT_DELTA = 0.4f;
 
 // Constants which differ per drill
 const string PREFIX_DRILL_NAME = "Drill";
@@ -72,7 +73,7 @@ const string PREFIX_LIFT_PISTON = "Lift Piston";
 
 /*** Some pre-defined drilling rigs I've set up ***/
 
-// *** Money Pit (gold & silver) ****
+//*** Money Pit (gold & silver) ****
 private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
 	"Drill Piston - 1st",
 	"Drill Piston - 2nd",
@@ -82,15 +83,36 @@ private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
 	"Lift Piston - Upper" };
 const string NAME_DISTANCE_PISTON = "Distance Piston";
 const string NAME_ROTOR = "Drill Rotor";
+/**/
 
-// *** Drill A ***
+/*** Silver Drill (HQ) ***
+private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
+	"Silver Drill - Lower Drill Piston",
+	"Silver Drill - Upper Drill Piston",
+	"Silver Drill - Lift Piston" };
+const string NAME_DISTANCE_PISTON = "Silver Drill - Distance Piston";
+const string NAME_ROTOR = "Silver Drill - Advanced Rotor";
+/**/
 
+/*** Drill A ***
+private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
+	"Drill A - Lower Drill Piston",
+	"Drill A - Upper Drill Piston",
+	"Drill A - Middle Drill Piston",
+	"Drill A - Lift Piston" };
+const string NAME_DISTANCE_PISTON = "Drill A - Distance Piston";
+const string NAME_ROTOR = "Drill A - Rotor";
+/**/
 
 /*** Drill B ***
-private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {"Drill B - Drill Piston Lower", "Drill B - Drill Piston - Upper", "Drill B - Lift Piston - Lower", "Drill B - Lift Piston - Upper"};
+private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
+	"Drill B - Lower Drill Piston",
+	"Drill B - Upper Drill Piston",
+	"Drill B - Lift Piston - Upper",
+	"Drill B - Lift Piston - Lower" };
 const string NAME_DISTANCE_PISTON = "Drill B - Distance Piston";
 const string NAME_ROTOR = "Drill B - Rotor";
-*/
+/**/
 
 int motorSwing = 0; // How many times the rotor's direction has been reversed at the current distance/angle settings
 
@@ -134,7 +156,7 @@ public Program()
 /**
 	Retracts all drill pistons, extends all lift pistons, and sets both min and max values to that max/min.
 	Also retracts the distance piston.
-
+*/
 public void resetPistons() {
 	foreach (IMyPistonBase piston in pistons) {
 		// Echo(piston.CustomName);
@@ -204,7 +226,7 @@ public void Main()
 		    Echo("Completed all swings (" + motorSwing + ")");
 			motorSwing = 0;
 
-			if (distancePiston.MaxLimit == distancePiston.MaxLimit) {
+			if (distancePiston.MaxLimit == distancePiston.HighestPosition) {
 
 				Echo("Extending next piston length");
 				if (! lengthenNextPiston()) {
@@ -213,7 +235,7 @@ public void Main()
 					reverseAllPistons();
 				}
 			} else {
-				distancePiston.MaxLimit = Math.Min(distancePiston.MaxLimit, distancePiston.MaxLimit + DISTANCE_DELTA);
+				distancePiston.MaxLimit = Math.Min(distancePiston.HighestPosition, distancePiston.MaxLimit + DISTANCE_DELTA);
 			    Echo("Setting Distance Piston's MaxLimit to:" + distancePiston.MaxLimit);
 			}
 		}
@@ -252,6 +274,7 @@ public void reverseAllPistons() {
 	foreach (IMyPistonBase piston in pistons) {
 		piston.Reverse();
 	}
+	distancePiston.Reverse();
 }
 
 public bool allPistonsStopped() {
@@ -267,16 +290,15 @@ public bool allPistonsStopped() {
 	Extends one drill piston or retracts one lift piston by HEIGHT_DELTA, returning true to indicate success.
 	If no piston can be extended/retracted (i.e. the drill is at its lowest position), returns false.
 */
-// TODO: this isn't working- it's returning false when we're first starting up with reset pistons
 public bool lengthenNextPiston() {
 	foreach (IMyPistonBase piston in pistons) {
-		float maxPosition = piston.Velocity > 0 ? piston.MaxLimit : piston.MinLimit;
+		float targetPosition = piston.Velocity > 0 ? piston.HighestPosition : piston.LowestPosition;
 		Echo(piston.CustomName);
 		Echo("CurrentPosition: " + piston.CurrentPosition);
-		Echo("maxPosition: " + maxPosition);
+		Echo("targetPosition: " + targetPosition);
 		Echo("MaxLimit : " + piston.MaxLimit);
 		Echo("MinLimit : " + piston.MinLimit);
-		if (piston.CurrentPosition != maxPosition) {
+		if (piston.CurrentPosition != targetPosition) {
 			if (piston.Velocity > 0) {
 				piston.MaxLimit = Math.Min(piston.MaxLimit + HEIGHT_DELTA, piston.HighestPosition);
 				Echo("Lengthening Piston: " + piston.CustomName + " to max of " + piston.MaxLimit);
@@ -293,27 +315,36 @@ public bool lengthenNextPiston() {
 }
 
 /**
-// https://github.com/malware-dev/MDK-SE/wiki/Sandbox.ModAPI.Ingame.IMyPistonBase
-Pistons-
+
+Important SDK information:
+
+Pistons- https://github.com/malware-dev/MDK-SE/wiki/Sandbox.ModAPI.Ingame.IMyPistonBase
 	Status:
 	* CurrentPosition
 	* Status (PistonStatus enum): see https://github.com/malware-dev/MDK-SE/wiki/Sandbox.ModAPI.Ingame.PistonStatus
 
 	Settings:
 	* MinLimit - minimum position the piston can retract to
-	* MaxLimit - 
+	* MaxLimit - maximum ...
 
 	Hardcoded limits:
-	* LowestPosition
-	* HighestPosition
+	* LowestPosition - lowest retraction position which can be set on the piston (always 0.0)
+	* HighestPosition - highest extension position which can be set on the piston (10.0 for large grid, 2.0 for small grid)
+
+All figures are in meters.
 
 
 Rotors-
+	Velocity:
+	* TargetVelocityRPM - Gets or sets the desired velocity of the rotor in **RPM**
+	Note that positive RPM means clockwise 
 
-TargetVelocityRPM - Gets or sets the desired velocity of the rotor in **RPM**
-Angle - Gets the current angle of the rotor in **radians**.
-LowerLimitRad - lower angle limit of the rotor in ***radians**. Set to float.MinValue for no limit.
-LowerLimitDeg - lower angle limit of the rotor in **degrees**. Set to float.MinValue for no limit.
-UpperLimitDeg - upper angle limit of the rotor in degrees. Set to float.MaxValue for no limit.
-RotorLock - get/set the rotor lock
+	Direction:
+	* Angle - Gets the current angle of the rotor in **radians**.
+	* LowerLimitRad - lower angle limit of the rotor in ***radians**. Set to float.MinValue for no limit.
+	* LowerLimitDeg - lower angle limit of the rotor in **degrees**. Set to float.MinValue for no limit.
+	* UpperLimitDeg - upper angle limit of the rotor in degrees. Set to float.MaxValue for no limit.
+
+	State:
+	* RotorLock - get/set the rotor lock
 **/
