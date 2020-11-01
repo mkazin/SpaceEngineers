@@ -2,60 +2,10 @@
 
 	Drilling program for Space Engineers.
 	Author: mkazin
-	Source: https://github.com/mkazin/SpaceEngineers
+	Source: https://github.com/mkazin/SpaceEngineers/
 
 	Description: this program will drill an area extending away from a drill rig.
-
-	The drill rig is composed of five sections. In the build order:
-	- An Advanced Rotor at the base, used to swing the drill in an arc.
-	  (notes: make sure to use Advanced Rotor, as the regular rotor will not convey drilled materials.
-	          also make sure to leave room under it to connect a conveyer.)
-	- m * Lift Pistons, attached to the rotor, facing upward.
-	- A Distance Piston, connected to the top Lift Piston via conveyor junction or curved conveyer.
-	- n * Drill Pistons, similarly connected to the attackment of the Distance piston, facing downward.
-	- A drill, attached to the lowest Drill Piston
-
-	Except for the rotor, a demonstration of this type of rig can be seen in part #5 of Splitsie's tutorial at:
-	https://www.youtube.com/watch?v=knRgN0WhzKg&list=PLfMGCUepUcNzLePdu3dZfMTLfWq1bclUK&index=5
-
-	Q: What shape is the area we are going to be drilling?
-
-	The surface shape being cut is defind as an "Annular Sector", being a sector of the ring between two 
-	concentric cylinders. See this page for a diagram and area calculator: 
-	https://www.aqua-calc.com/calculate/area-annulus
-
-	We'll also be drilling to a depth, which means multiplying the area providedin that calculator by 
-	height to attain the total volume being excavated (the volume formula of a cylinder using its height).
-
-	TODO: test this volume and compare to the removed material dumped into a large container with no refinery (1 cubic meter = 1000 liters).
-
-	In plainer terms, this means we are drilling out the area between two arcs-
-	- one whose radius is the sum of a rotor's radius and the length of a retracted piston (TODO: calculate this)
-	- the second being the above, plus the extension length of the distance piston (10m on large grid)
-	And we are drilling down to a depth defined by the total extension length of the lift+drill pistons (m + n),
-	minus the height of the rotor off the ground, and then adjusted by any unsmooth terrain.
-
-	(NOTE: this isn't perfectly accurate, as the drill will be extracting material both outside the angle defined 
-	by the rotor, as well as outside the outer radius and inside the inner radius.)
-
-	(TODO: this would be a lot clearer with an image)
-
-	Usage:
-		* Modify constants in NAME_VERTICAL_PISTONS to the names of your blocks
-		* Modify the PREFIX_ constants to match text in your blocks (you may need to rename your blocks)
-		* Enter your modified code a programmable cube. 
-		* Program your rotor with upper and lower angle bounds; move the rotor to within those bounds.
-		* Turn on the programmable cube.
-
-	Future Development:
-		* Tune default values for swings, velocities (either hard-code, or perhaps dynamically using m & n).
-		* Auto-detect drilling rigs? (easy when a single rig is on the current grid, might be able to use subgrids off a rotor)
-		* Support multiple Distance Pistons? (Would such a construct even be stable?)
-		* Output? How about calculating an ETA? Swing count, Piston status?
-
-	Theoretically this program should support small grid drilling rigs, but this has not yet been tested.
 **/
-
 
 // Number of times a rotor will swing in an arc across the current distance
 const int MAX_ROTOR_SWINGS = 2;
