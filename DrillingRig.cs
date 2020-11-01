@@ -228,15 +228,23 @@ public void Main()
 
 			if (distancePiston.MaxLimit == distancePiston.HighestPosition) {
 
-				Echo("Extending next piston length");
+				Echo("Pulling back distance piston and extending next piston length");
+				distancePiston.MaxLimit = distancePiston.LowestPosition;
+
 				if (! lengthenNextPiston()) {
 					Echo("Reversing all pistons");
 					inPistonRetract = true;
 					reverseAllPistons();
 				}
+
+				// Make sure the distance piston is retracting either way as it hit its limit.
+				distancePiston.Velocity = -Math.Abs(distancePiston.Velocity);
+
 			} else {
 				distancePiston.MaxLimit = Math.Min(distancePiston.HighestPosition, distancePiston.MaxLimit + DISTANCE_DELTA);
 			    Echo("Setting Distance Piston's MaxLimit to:" + distancePiston.MaxLimit);
+				// Make sure the distance piston will extend
+				distancePiston.Velocity = Math.Abs(distancePiston.Velocity);
 			}
 		}
     } else {
