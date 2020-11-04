@@ -1,4 +1,4 @@
-/** DrillingRig.cs v. 0.1
+/** DrillingRig.cs v. 0.2
 
 	Drilling program for Space Engineers.
 	Author: mkazin
@@ -8,6 +8,8 @@
 **/
 
 // Number of times a rotor will swing in an arc across the current distance
+// Has a linear relationship with rotor RPM.
+// Do not lower below two, which allows for distance piston to retract.
 const int MAX_ROTOR_SWINGS = 2;
 
 // Amount to increse the distance piston after we finish our swings. I'm assuming meters.
@@ -22,6 +24,17 @@ const string PREFIX_DRILL_PISTON = "Drill Piston";
 const string PREFIX_LIFT_PISTON = "Lift Piston";
 
 /*** Some pre-defined drilling rigs I've set up ***/
+
+/*** Magnesium Mine ****
+private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
+	"Drill Piston - 1st",
+	"Drill Piston - 2nd",
+	"Drill Piston - 3rd",
+	"Drill - Lift Piston - Lower",
+	"Drill - Lift Piston - Upper" };
+const string NAME_DISTANCE_PISTON = "Drill - Distance Piston";
+const string NAME_ROTOR = "Drill - Advanced Rotor";
+/**/
 
 //*** Money Pit (gold & silver) ****
 private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
@@ -64,13 +77,25 @@ const string NAME_DISTANCE_PISTON = "Drill B - Distance Piston";
 const string NAME_ROTOR = "Drill B - Rotor";
 /**/
 
+
+/*** Iron Drill (BOD) ***
+private static List<string> NAME_VERTICAL_PISTONS = new List<String>() {
+	"Iron Drill - 1st Drill Piston",
+	"Iron Drill - 2nd Drill Piston",
+	"Iron Drill - 3rd Drill Piston",
+	"Iron Drill - Upper Lift Piston",
+	"Iron Drill - Lower Lift Piston" };
+const string NAME_DISTANCE_PISTON = "Iron Drill - Distance Piston";
+const string NAME_ROTOR = "Iron Drill - Advanced Rotor";
+/**/
+
+
 int motorSwing = 0; // How many times the rotor's direction has been reversed at the current distance/angle settings
 
 // List of pistons used to adjust height of the drill. Does NOT include the distance piston.
 List<IMyPistonBase> pistons = new List<IMyPistonBase>();
 
 IMyMotorAdvancedStator rotor;
-// IMyPistonBase drillLowerPiston;
 
 // Piston at the top of the drill which determines outward distance
 IMyPistonBase distancePiston;
@@ -109,22 +134,15 @@ public Program()
 */
 public void resetPistons() {
 	foreach (IMyPistonBase piston in pistons) {
-		// Echo(piston.CustomName);
 		// Initial piston setup -retract all pistons
-		if (piston.CustomName.Contains(PREFIX_DRILL_PISTON)) {
+		if (isDrillPiston(piston)) {
 			piston.MaxLimit = piston.LowestPosition;
 			piston.MinLimit = piston.LowestPosition;
 			piston.Velocity = -Math.Abs(piston.Velocity);
-			// Echo(piston.CustomName);
-			// Echo("MaxLimit set to " + piston.MaxLimit);
-			// Echo("Velocity set to " + piston.Velocity);
-		} else if (piston.CustomName.Contains(PREFIX_LIFT_PISTON)) {
+		} else if (isLiftPiston(piston)) {
 			piston.MaxLimit = piston.HighestPosition;
 			piston.MinLimit = piston.HighestPosition;
 			piston.Velocity = Math.Abs(piston.Velocity);
-			// Echo(piston.CustomName);
-			// Echo("MinLimit set to " + piston.MinLimit);
-			// Echo("Velocity set to " + piston.Velocity);			
 		} else {
 			Echo("Unsupported Piston: " + piston.CustomName);
 		}
@@ -151,8 +169,6 @@ public void Main()
 	// Handles swinging the rotor back and forth, extending
 	// the distace piston once the swings are complete.
 	//*****************************************************
-    Echo("Rotor at " + rotor.LowerLimitRad + " radians");
-
     if (inPistonRetract) {
     	if (allPistonsStopped()) {
     		Echo("Retraction complete. Resetting velocities.");
@@ -178,11 +194,11 @@ public void Main()
 
 			if (distancePiston.MaxLimit == distancePiston.HighestPosition) {
 
-				Echo("Pulling back distance piston and extending next piston length");
+				Echo("Retracting distance piston");
 				distancePiston.MaxLimit = distancePiston.LowestPosition;
 
 				if (! lengthenNextPiston()) {
-					Echo("Reversing all pistons");
+					Echo("No pistons left to extend. Reversing all pistons");
 					inPistonRetract = true;
 					reverseAllPistons();
 				}
@@ -198,15 +214,23 @@ public void Main()
 			}
 		}
     } else {
-    	Echo("In swing #" + motorSwing);
+		// Output current status
+		Echo("In swing #" + motorSwing);
+		foreach (IMyPistonBase piston in pistons) {
+			Echo(piston.CustomName + " at " + piston.CurrentPosition);
+		}
+		Echo(distancePiston.CustomName + " at " + distancePiston.CurrentPosition);
     }
-
-    // if (allPistonsStopped() && rotorStopped()) {
-    // 	if (drillLowerPiston) {
-
-    // 	}
-    // }
 }
+
+public bool isDrillPiston(IMyPistonBase piston) {
+	return piston.CustomName.Contains(PREFIX_DRILL_PISTON);
+}
+
+public bool isLiftPiston(IMyPistonBase piston) {
+	return piston.CustomName.Contains(PREFIX_LIFT_PISTON);
+}
+
 
 public bool rotorStopped() {
 
@@ -218,15 +242,6 @@ public bool rotorStopped() {
 	}
 	return false;
 }
-
-// public bool allPistonsExtended() {
-// 	return pistons.Where(p => p.Status != PistonStatus.Extended).Any();
-// 	// return pistons.Where(p => p.Status != Extended).Select(x => x.Status).Count() == 0;
-// }
-
-// public bool allPistonsRetracted() {
-// 	return pistons.Where(p => p.Status != PistonStatus.Retracted).Any();
-// }
 
 public void reverseAllPistons() {
 	foreach (IMyPistonBase piston in pistons) {
@@ -250,21 +265,20 @@ public bool allPistonsStopped() {
 */
 public bool lengthenNextPiston() {
 	foreach (IMyPistonBase piston in pistons) {
-		float targetPosition = piston.Velocity > 0 ? piston.HighestPosition : piston.LowestPosition;
-		Echo(piston.CustomName);
-		Echo("CurrentPosition: " + piston.CurrentPosition);
-		Echo("targetPosition: " + targetPosition);
-		Echo("MaxLimit : " + piston.MaxLimit);
-		Echo("MinLimit : " + piston.MinLimit);
+		float targetPosition = isDrillPiston(piston) ? piston.HighestPosition : piston.LowestPosition;
 		if (piston.CurrentPosition != targetPosition) {
-			if (piston.Velocity > 0) {
+			if (isDrillPiston(piston)) {
 				piston.MaxLimit = Math.Min(piston.MaxLimit + HEIGHT_DELTA, piston.HighestPosition);
-				Echo("Lengthening Piston: " + piston.CustomName + " to max of " + piston.MaxLimit);
+				piston.Velocity = Math.Abs(piston.Velocity);
+				Echo("Extending " + piston.CustomName + " to " + piston.MaxLimit);
 			} else {
 				piston.MinLimit = Math.Max(piston.MinLimit - HEIGHT_DELTA, piston.LowestPosition);
-				Echo("Shortening Piston: " + piston.CustomName + " to min of " + piston.MinLimit);
+				piston.Velocity = -Math.Abs(piston.Velocity);
+				Echo("Retracting " + piston.CustomName + " to " + piston.MinLimit);
 			}
 			return true;
+		} else {
+			Echo(piston.CustomName + " at max");
 		}
 	}
 	Echo("Drill at lowest point. Returning false.");
