@@ -1,4 +1,4 @@
-/** DrillingRig.cs v. 0.3
+/** DrillingRig.cs v. 0.31
 
 	Drilling program for Space Engineers.
 	Author: mkazin
@@ -10,9 +10,10 @@
 // Number of times a rotor will swing in an arc across the current distance
 // Has a linear relationship with rotor RPM.
 // Do not lower below two, which allows for distance piston to retract.
+// Setting your rotor at above 2RPM will increase the chances of the drill arm getting stuck.
 const int MAX_ROTOR_SWINGS = 2;
 
-// Amount to increse the distance piston after we finish our swings. I'm assuming meters.
+// Amount to increse the distance piston after we finish our swings in meters.
 const float DISTANCE_DELTA = 2.0f;
 
 // Amount to raise drill pistons/lower lift pistons between swing sets.
@@ -25,7 +26,7 @@ const string PREFIX_LIFT_PISTON = "Lift Piston";
 
 // Used to store position state
 const char DELIMITER_GROUP = ';';
-const char DELIMITER_ITEM = ',';
+const char DELIMITER_ITEM = ':';
 
 /*** Some pre-defined drilling rigs I've set up ***/
 
@@ -39,6 +40,7 @@ private static List<string> NAME_LIFT_PISTONS = new List<String>() {
 	"Drill - Lift Piston - Upper" };
 const string NAME_DISTANCE_PISTON = "Drill - Distance Piston";
 const string NAME_ROTOR = "Drill - Advanced Rotor";
+const string NAME_LCD = "Drill - LCD";
 /**/
 
 /*** Money Pit (gold & silver) ****
@@ -55,7 +57,7 @@ const string NAME_ROTOR = "Drill Rotor";
 const string NAME_LCD = "Drill LCD";
 /**/
 
-//*** Silver Drill (HQ) ***
+/*** Silver Drill (HQ) ***
 private static List<string> NAME_DRILL_PISTONS = new List<String>() {
 	"Silver Drill - Lower Drill Piston",
 	"Silver Drill - Upper Drill Piston"};
@@ -75,6 +77,7 @@ private static List<string> NAME_LIFT_PISTONS = new List<String>() {
 	"Drill A - Lift Piston" };
 const string NAME_DISTANCE_PISTON = "Drill A - Distance Piston";
 const string NAME_ROTOR = "Drill A - Rotor";
+const string NAME_LCD = "Drill A - LCD";
 /**/
 
 /*** Drill B ***
@@ -86,8 +89,22 @@ private static List<string> NAME_LIFT_PISTONS = new List<String>() {
 	"Drill B - Lift Piston - Lower" };
 const string NAME_DISTANCE_PISTON = "Drill B - Distance Piston";
 const string NAME_ROTOR = "Drill B - Rotor";
+const string NAME_LCD = "Drill B - LCD";
 /**/
 
+//*** Drill C ***
+private static List<string> NAME_DRILL_PISTONS = new List<String>() {
+	"Drill C - Drill Piston - 1st",
+	"Drill C - Drill Piston - 2nd",
+	"Drill C - Drill Piston - 3rd" };
+private static List<string> NAME_LIFT_PISTONS = new List<String>() {
+	"Drill C - Lift Piston - Upper",
+	"Drill C - Lift Piston - Middle",
+	"Drill C - Lift Piston - Lower" };
+const string NAME_DISTANCE_PISTON = "Drill C - Distance Piston";
+const string NAME_ROTOR = "Drill C - Rotor";
+const string NAME_LCD = "Drill C - LCD";
+/**/
 
 /*** Iron Drill (BOD) ***
 private static List<string> NAME_DRILL_PISTONS = new List<String>() {
@@ -152,23 +169,20 @@ public Program()
 	if (! Load()) {
 		resetPistons();
 	}
-
-	// initialSetup = true;
 }
 
 public void Save() {
 	string data = "";
-	data += distancePiston.CurrentPosition + DELIMITER_GROUP;
+	data += String.Format("{0:.##}", distancePiston.CurrentPosition) + DELIMITER_GROUP;
 
 	foreach(IMyPistonBase piston in liftPistons) {
-		data += distancePiston.CurrentPosition + DELIMITER_ITEM;
+		data += String.Format("{0:.##}", piston.CurrentPosition) + DELIMITER_ITEM;
 	}
 	data += DELIMITER_GROUP;
 
 	foreach(IMyPistonBase piston in drillPistons) {
-		data += distancePiston.CurrentPosition + DELIMITER_ITEM;
+		data += String.Format("{0:.##}", piston.CurrentPosition) + DELIMITER_ITEM;
 	}
-	data += DELIMITER_GROUP;
 
 	Storage = data;
 }
@@ -188,28 +202,31 @@ public bool Load() {
 		return false;
 	}
 	
-	distancePiston.MaxLimit = float.Parse(storedData[0]);
-
-	string[] liftPistonData = storedData[1].Split(DELIMITER_ITEM);
-	for (int index=0; index < liftPistonData.Length; index++) {
-		liftPistons[index].MinLimit = float.Parse(liftPistonData[index]);
+	float value;
+	if (! float.TryParse(storedData[0], out value)) {
+		Output("Invalid data in Storage");
+		return false;
 	}
+	distancePiston.MaxLimit = value;
 
-	string[] drillPistonData = storedData[2].Split(DELIMITER_ITEM);
-	for (int index=0; index < drillPistonData.Length; index++) {
-		drillPistons[index].MaxLimit = float.Parse(liftPistonData[index]);
+	try {
+		string[] liftPistonData = storedData[1].Split(DELIMITER_ITEM);
+		for (int index=0; index < liftPistonData.Length - 1; index++) {
+			liftPistons[index].MinLimit = float.Parse(liftPistonData[index]);
+		}
+
+		string[] drillPistonData = storedData[2].Split(DELIMITER_ITEM);
+		for (int index=0; index < drillPistonData.Length - 1; index++) {
+			drillPistons[index].MaxLimit = float.Parse(drillPistonData[index]);
+		}
+	} catch {
+		Output("Invalid data in Storage");
+		Storage = "";
+		return false;
 	}
 
 	return true;
 }
-// private void LoadPistons(List<IMyPistonBase> pistons, string[] data) {
-// 	int index = 0;
-// 	string[] liftPistonData = data.Split(DELIMITER_ITEM);
-// 	foreach (string pistonData in pistonDataArray) {
-// 		pistons.get(index).CurrentPosition = double.Parse(pistonData);
-// 		index++;
-// 	}
-// }
 
 /**
 	Retracts all drill pistons, extends all lift pistons, and sets both min and max values to that max/min.
@@ -286,6 +303,8 @@ public void Main()
 					reverseAllPistons();
 				}
 
+				Save();
+
 				// Make sure the distance piston is retracting either way as it hit its limit.
 				distancePiston.Velocity = -Math.Abs(distancePiston.Velocity);
 
@@ -299,13 +318,13 @@ public void Main()
 	} else {
 		// Output current status
 		Output("In swing #" + motorSwing);
-		foreach (IMyPistonBase piston in liftPistons) {
-			Output(piston.CustomName + " at " + piston.CurrentPosition);
-		}
+		Output(distancePiston.CustomName + " at " + distancePiston.CurrentPosition);
 		foreach (IMyPistonBase piston in drillPistons) {
 			Output(piston.CustomName + " at " + piston.CurrentPosition);
 		}
-		Output(distancePiston.CustomName + " at " + distancePiston.CurrentPosition);
+		foreach (IMyPistonBase piston in liftPistons) {
+			Output(piston.CustomName + " at " + piston.CurrentPosition);
+		}
 
 		Output("Storage: " + Storage);
 	}
